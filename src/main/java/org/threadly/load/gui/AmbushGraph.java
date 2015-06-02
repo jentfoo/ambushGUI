@@ -389,17 +389,17 @@ public class AmbushGraph {
   }
 
   private void updateMainOrigin(int x, int y) {
-    // TODO - this wont let us move the visual window to some positions if main window is shrunk down
     GraphDataSet dataSet = this.currentDataSet;
+    double max;
     if (x <= 0) {
       x = 0;
-    } else if (x + dataSet.naturalBounds.x > dataSet.naturalBounds.x * dataSet.zoomFactor) {
-      x = (int)(dataSet.naturalBounds.x * dataSet.zoomFactor) - dataSet.naturalBounds.x;
+    } else if (x > (max = (dataSet.naturalBounds.x * dataSet.zoomFactor) - mainShell.getSize().x)) {
+      x = (int)max;
     }
     if (y <= 0) {
       y = 0;
-    } else if (y + dataSet.naturalBounds.y > dataSet.naturalBounds.y * dataSet.zoomFactor) {
-      y = (int)(dataSet.naturalBounds.y * dataSet.zoomFactor) - dataSet.naturalBounds.y;
+    } else if (y > (max = (dataSet.naturalBounds.y * dataSet.zoomFactor) - mainShell.getSize().y)) {
+      y = (int)max;
     }
     dataSet.mainOrigin = new Point(x, y);
 
