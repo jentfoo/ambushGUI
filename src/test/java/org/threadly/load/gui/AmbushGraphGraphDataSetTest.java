@@ -25,8 +25,8 @@ public class AmbushGraphGraphDataSetTest {
   
   @Test
   public void constructorTest() {
-    assertEquals(X_SIZE, dataSet.mainBounds.x);
-    assertEquals(Y_SIZE, dataSet.mainBounds.y);
+    assertEquals(X_SIZE, dataSet.naturalBounds.x);
+    assertEquals(Y_SIZE, dataSet.naturalBounds.y);
     assertTrue(dataSet.guiNodeMap.isEmpty());
     assertEquals(0, dataSet.mainOrigin.x);
     assertEquals(0, dataSet.mainOrigin.y);
