@@ -514,9 +514,10 @@ public class AmbushGraph {
           dataSet.dragPoint = new Point(me.x, me.y);
         }
       } else if (dataSet.movingPoint != null) {
-        // TODO - does this math make sense?  If so comment it
+        // first translate point on window to absolute
         int translatedX = (int)((me.x + dataSet.mainOrigin.x) / dataSet.zoomFactor);
         int translatedY = (int)((me.y + dataSet.mainOrigin.y) / dataSet.zoomFactor);
+        // TODO - comment on logic bellow
         dataSet.movingPoint.setPosition(Math.max(Math.min(translatedX, (zoomedIn(dataSet) ? mainShell.getSize().x : (int)(mainShell.getSize().x * (1 / dataSet.zoomFactor))) - 25), 10),
                                         Math.max(Math.min(translatedY, (zoomedIn(dataSet) ? mainShell.getSize().y : (int)(mainShell.getSize().y * (1 / dataSet.zoomFactor))) - 45), 10));
 
@@ -537,35 +538,33 @@ public class AmbushGraph {
     @Override
     public void mouseScrolled(MouseEvent me) {
       GraphDataSet dataSet = AmbushGraph.this.currentDataSet;
-      int xZoomChange = (int)((mainShell.getSize().x * (dataSet.zoomFactor + .1)) - (mainShell.getSize().x * dataSet.zoomFactor));
-      int yZoomChange = (int)((mainShell.getSize().y * (dataSet.zoomFactor + .1)) - (mainShell.getSize().y * dataSet.zoomFactor));
+      double newZoomFactor;
       if (me.count > 0) {
         if ( dataSet.zoomFactor > 5) {
           // already fully zoomed in
           return;
         }
         // scroll forward / zoom in
-        dataSet.zoomFactor += .1;
-        
-        int newX = dataSet.mainOrigin.x;
-        int newY = dataSet.mainOrigin.y;
-        newX += xZoomChange / 2;
-        newY += yZoomChange / 2;
-        // TODO - we could zoom in on the mouse position
-        updateMainOrigin(newX, newY);
-      } else { // scroll back / zoom out
+        newZoomFactor = dataSet.zoomFactor + .1;
+        // TODO - zoom in mouse position?
+      } else {
         if (dataSet.zoomFactor < .8) {
           // already fully zoomed out
           return;
         }
-        dataSet.zoomFactor -= .1;
-        
-        int newX = dataSet.mainOrigin.x;
-        int newY = dataSet.mainOrigin.y;
-        newX -= xZoomChange / 2;
-        newY -= yZoomChange / 2;
-        updateMainOrigin(newX, newY);
+        // scroll back / zoom out
+        newZoomFactor = dataSet.zoomFactor - .1;
       }
+      int xZoomChange = (int)((mainShell.getSize().x * newZoomFactor) - (mainShell.getSize().x * dataSet.zoomFactor));
+      int yZoomChange = (int)((mainShell.getSize().y * newZoomFactor) - (mainShell.getSize().y * dataSet.zoomFactor));
+      
+      dataSet.zoomFactor = newZoomFactor;
+      
+      int newX = dataSet.mainOrigin.x;
+      int newY = dataSet.mainOrigin.y;
+      newX += xZoomChange / 2;
+      newY += yZoomChange / 2;
+      updateMainOrigin(newX, newY);
     }
 
     @Override
@@ -652,35 +651,33 @@ public class AmbushGraph {
     @Override
     public void mouseScrolled(MouseEvent me) {
       GraphDataSet dataSet = AmbushGraph.this.currentDataSet;
-      int xZoomChange = (int)((mainShell.getSize().x * (dataSet.zoomFactor + .1)) - (mainShell.getSize().x * dataSet.zoomFactor));
-      int yZoomChange = (int)((mainShell.getSize().y * (dataSet.zoomFactor + .1)) - (mainShell.getSize().y * dataSet.zoomFactor));
+      double newZoomFactor;
       if (me.count > 0) {
-        if (dataSet.zoomFactor > 5) {
+        if ( dataSet.zoomFactor > 5) {
           // already fully zoomed in
           return;
         }
         // scroll forward / zoom in
-        dataSet.zoomFactor += .1;
-        
-        int newX = dataSet.mainOrigin.x;
-        int newY = dataSet.mainOrigin.y;
-        newX += xZoomChange / 2;
-        newY += yZoomChange / 2;
-        updateMainOrigin(newX, newY);
+        newZoomFactor = dataSet.zoomFactor + .1;
+        // TODO - zoom in on mouse position?
       } else {
         if (dataSet.zoomFactor < .8) {
           // already fully zoomed out
           return;
         }
         // scroll back / zoom out
-        dataSet.zoomFactor -= .1;
-        
-        int newX = dataSet.mainOrigin.x;
-        int newY = dataSet.mainOrigin.y;
-        newX -= xZoomChange/ 2;
-        newY -= yZoomChange / 2;
-        updateMainOrigin(newX, newY);
+        newZoomFactor = dataSet.zoomFactor - .1;
       }
+      int xZoomChange = (int)((mainShell.getSize().x * newZoomFactor) - (mainShell.getSize().x * dataSet.zoomFactor));
+      int yZoomChange = (int)((mainShell.getSize().y * newZoomFactor) - (mainShell.getSize().y * dataSet.zoomFactor));
+      
+      dataSet.zoomFactor = newZoomFactor;
+      
+      int newX = dataSet.mainOrigin.x;
+      int newY = dataSet.mainOrigin.y;
+      newX += xZoomChange / 2;
+      newY += yZoomChange / 2;
+      updateMainOrigin(newX, newY);
     }
   }
 
@@ -737,18 +734,23 @@ public class AmbushGraph {
           }
           int sampleSize = 0;
           int totalParentPos = 0;
-          for (Node pNode : childNode.getParentNodes()) {
+          Iterator<Node> pIt = childNode.getParentNodes().iterator();
+          List<Node> toRemoveParents = new ArrayList<Node>();
+          while (pIt.hasNext()) {
+            Node pNode = pIt.next();
             GuiPoint gp = guiNodeMap.get(pNode);
             if (gp == null) {
-              /* TODO - this is rather common due to deleted nodes which make
-               * parts of the graph unable to be reached from child nodes
+              /* This is rather common from node deletions which result in no way to get to them 
+               * via child chains, for now we just clean this up as we find it.
                */
-              /*System.err.println("***** " + childNode.getName() +
-                                 " is connected to an unknown node: " + pNode.getName() + " *****");*/
+              toRemoveParents.add(pNode);
               continue;
             }
             sampleSize++;
             totalParentPos += gp.getY();
+          }
+          for (Node pNode: toRemoveParents) {
+            childNode.removeParentNode(pNode);
           }
           if (sampleSize > 0) {
             int moveDistance = ((totalParentPos / sampleSize) - childGp.getY()) / SQUEEZE_FACTOR;
