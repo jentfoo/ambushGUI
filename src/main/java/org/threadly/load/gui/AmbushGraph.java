@@ -182,7 +182,7 @@ public class AmbushGraph {
     GraphDataSet newDataSet = new GraphDataSet(currentDataSet.naturalBounds.x, currentDataSet.naturalBounds.y);
     traverseNode(newDataSet, headNode, buildingMap, 1, 1, new AtomicInteger(), xRegionCountMap);
 
-    // cleanup xRegionCountMap, we make it so in each x region, the y region starts at 1, and there are no missing values
+    // cleanup xRegionCountMap, make it so in each x region, the y region starts at 1, and there are no missing values
     int maxYCount = 0;
     Iterator<List<GuiPoint>> it = xRegionCountMap.values().iterator();
     while (it.hasNext()) {
