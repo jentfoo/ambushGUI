@@ -2,10 +2,13 @@ package org.threadly.load.gui;
 
 import static org.junit.Assert.*;
 
+import java.util.Collections;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.threadly.load.gui.AmbushGraph.GraphDataSet;
+import org.threadly.load.gui.AmbushGraph.GuiPoint;
 
 @SuppressWarnings("javadoc")
 public class AmbushGraphGraphDataSetTest {
@@ -34,7 +37,7 @@ public class AmbushGraphGraphDataSetTest {
   
   @Test
   public void squeezeNoOpTest() {
-    dataSet.squeezePoints(new Node());
+    dataSet.setData(Collections.<Node, GuiPoint>emptyMap(), new Node());
     // no exception should throw
   }
 }
