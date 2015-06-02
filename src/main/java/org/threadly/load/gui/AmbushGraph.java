@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.ControlEvent;
+import org.eclipse.swt.events.ControlListener;
 import org.eclipse.swt.events.DragDetectEvent;
 import org.eclipse.swt.events.DragDetectListener;
 import org.eclipse.swt.events.MouseEvent;
@@ -48,9 +50,9 @@ public class AmbushGraph {
   private static final int DRAG_TOLLERANCE = 25;
   private static final int HIGHLIGHT_DISAPEAR_DELAY = 2000;
   private static final int BACKGROUND_GRAY = 210;
-  private static final int GRID_SOFTNESS = 100;  // randomness for point placement
-  private static final int DISTANCE_FROM_EDGE = 75;  // dots wont be placed within this distance from the edge
-  private static final int SQUEEZE_FACTOR = 4;  // smaller numbers result in tighter plot groups
+  private static final int GRID_SOFTNESS = 50;  // randomness for point placement
+  private static final int DISTANCE_FROM_EDGE = 50;  // dots wont be placed within this distance from the edge
+  private static final int SQUEEZE_FACTOR = 2;  // smaller numbers result in tighter plot groups
   private static final int MAX_NODES_DRAW_ALL_NAMES = 20;
   private static final Random RANDOM = new Random(Clock.lastKnownTimeMillis());
 
@@ -340,8 +342,8 @@ public class AmbushGraph {
     gc.setForeground(new Color(mainShell.getDisplay(), 0, 0, 0));
     if (preview) {
       if (zoomedIn(dataSet)) {
-        double xFactor = previewShell.getSize().x / (mainShell.getSize().x * dataSet.zoomFactor);
-        double yFactor = previewShell.getSize().y / (mainShell.getSize().y * dataSet.zoomFactor);
+        double xFactor = previewShell.getSize().x / (dataSet.naturalBounds.x * dataSet.zoomFactor);
+        double yFactor = previewShell.getSize().y / (dataSet.naturalBounds.y * dataSet.zoomFactor);
         int translatedMainOriginX = (int)(dataSet.mainOrigin.x * xFactor);
         int translatedMainOriginY = (int)(dataSet.mainOrigin.y * yFactor);
         int translatedMainWidth = (int)(mainShell.getSize().x * xFactor);
@@ -358,8 +360,10 @@ public class AmbushGraph {
     }
   }
 
-  private static boolean zoomedIn(GraphDataSet dataSet) {
-    return dataSet.zoomFactor > 1;
+  private boolean zoomedIn(GraphDataSet dataSet) {
+    return dataSet.zoomFactor > 1 || 
+             dataSet.naturalBounds.x > mainShell.getSize().x + 10 || 
+             dataSet.naturalBounds.y > mainShell.getSize().y + 10;
   }
 
   private GuiPoint getClosestPoint(int x, int y) {
@@ -385,19 +389,17 @@ public class AmbushGraph {
   }
 
   private void updateMainOrigin(int x, int y) {
+    // TODO - this wont let us move the visual window to some positions if main window is shrunk down
     GraphDataSet dataSet = this.currentDataSet;
-    if (zoomedIn(dataSet)) {
-      currentDataSet.mainOrigin = new Point(0, 0);
-    }
     if (x <= 0) {
       x = 0;
-    } else if (x + mainShell.getSize().x > mainShell.getSize().x * dataSet.zoomFactor) {
-      x = (int)(mainShell.getSize().x * dataSet.zoomFactor) - mainShell.getSize().x;
+    } else if (x + dataSet.naturalBounds.x > dataSet.naturalBounds.x * dataSet.zoomFactor) {
+      x = (int)(dataSet.naturalBounds.x * dataSet.zoomFactor) - dataSet.naturalBounds.x;
     }
     if (y <= 0) {
       y = 0;
-    } else if (y + mainShell.getSize().y > mainShell.getSize().y * dataSet.zoomFactor) {
-      y = (int)(mainShell.getSize().y * dataSet.zoomFactor) - mainShell.getSize().y;
+    } else if (y + dataSet.naturalBounds.y > dataSet.naturalBounds.y * dataSet.zoomFactor) {
+      y = (int)(dataSet.naturalBounds.y * dataSet.zoomFactor) - dataSet.naturalBounds.y;
     }
     dataSet.mainOrigin = new Point(x, y);
 
@@ -452,12 +454,13 @@ public class AmbushGraph {
    * @author jent - Mike Jensen
    */
   private class MainWindowListener implements DragDetectListener, MouseListener, 
-                                              MouseMoveListener, MouseWheelListener {
+                                              MouseMoveListener, MouseWheelListener, ControlListener {
     public void registerListener() {
       mainShell.addDragDetectListener(this);
       mainShell.addMouseListener(this);
       mainShell.addMouseMoveListener(this);
       mainShell.addMouseWheelListener(this);
+      mainShell.addControlListener(this);
     }
 
     @Override
@@ -511,6 +514,7 @@ public class AmbushGraph {
           dataSet.dragPoint = new Point(me.x, me.y);
         }
       } else if (dataSet.movingPoint != null) {
+        // TODO - does this math make sense?  If so comment it
         int translatedX = (int)((me.x + dataSet.mainOrigin.x) / dataSet.zoomFactor);
         int translatedY = (int)((me.y + dataSet.mainOrigin.y) / dataSet.zoomFactor);
         dataSet.movingPoint.setPosition(Math.max(Math.min(translatedX, (zoomedIn(dataSet) ? mainShell.getSize().x : (int)(mainShell.getSize().x * (1 / dataSet.zoomFactor))) - 25), 10),
@@ -530,43 +534,48 @@ public class AmbushGraph {
       }
     }
 
-    // TODO - improve zoom scroll math
     @Override
     public void mouseScrolled(MouseEvent me) {
       GraphDataSet dataSet = AmbushGraph.this.currentDataSet;
+      int xZoomChange = (int)((mainShell.getSize().x * (dataSet.zoomFactor + .1)) - (mainShell.getSize().x * dataSet.zoomFactor));
+      int yZoomChange = (int)((mainShell.getSize().y * (dataSet.zoomFactor + .1)) - (mainShell.getSize().y * dataSet.zoomFactor));
       if (me.count > 0) {
         if ( dataSet.zoomFactor > 5) {
           // already fully zoomed in
           return;
         }
-        int xZoomShrink = (int)(mainShell.getSize().x * dataSet.zoomFactor) / 10;
-        int yZoomShrink = (int)(mainShell.getSize().y * dataSet.zoomFactor) / 10;
         // scroll forward / zoom in
         dataSet.zoomFactor += .1;
         
         int newX = dataSet.mainOrigin.x;
         int newY = dataSet.mainOrigin.y;
-        newX += xZoomShrink / 2;
-        newY += yZoomShrink / 2;
-        newX += ((me.x - (mainShell.getSize().x / 2)) * 2) / 10;
-        newY += ((me.y - (mainShell.getSize().y / 2)) * 2) / 10;
+        newX += xZoomChange / 2;
+        newY += yZoomChange / 2;
+        // TODO - we could zoom in on the mouse position
         updateMainOrigin(newX, newY);
-      } else {
+      } else { // scroll back / zoom out
         if (dataSet.zoomFactor < .8) {
           // already fully zoomed out
           return;
         }
-        // scroll back / zoom out
-        int xZoomGrow = (int)(mainShell.getSize().x * dataSet.zoomFactor) / 10;
-        int yZoomGrow = (int)(mainShell.getSize().y * dataSet.zoomFactor) / 10;
         dataSet.zoomFactor -= .1;
         
         int newX = dataSet.mainOrigin.x;
         int newY = dataSet.mainOrigin.y;
-        newX -= (xZoomGrow / (1 / dataSet.zoomFactor)) / 5;
-        newY -= (yZoomGrow / (1 / dataSet.zoomFactor)) / 5;
+        newX -= xZoomChange / 2;
+        newY -= yZoomChange / 2;
         updateMainOrigin(newX, newY);
       }
+    }
+
+    @Override
+    public void controlMoved(ControlEvent arg0) {
+      // ignored
+    }
+
+    @Override
+    public void controlResized(ControlEvent arg0) {
+      redraw();
     }
   }
 
@@ -590,9 +599,9 @@ public class AmbushGraph {
       if (arg0.button != 1 || ! zoomedIn(dataSet)) {
         return;
       }
-      
-      double xFactor = (previewShell.getSize().x) / (mainShell.getSize().x * dataSet.zoomFactor);
-      double yFactor = (previewShell.getSize().y) / (mainShell.getSize().y * dataSet.zoomFactor);
+
+      double xFactor = previewShell.getSize().x / (dataSet.naturalBounds.x * dataSet.zoomFactor);
+      double yFactor = previewShell.getSize().y / (dataSet.naturalBounds.y * dataSet.zoomFactor);
       int translatedMainOriginX = (int)(dataSet.mainOrigin.x * xFactor);
       int translatedMainOriginY = (int)(dataSet.mainOrigin.y * yFactor);
       int translatedMainWidth = (int)(mainShell.getSize().x * xFactor);
@@ -608,10 +617,10 @@ public class AmbushGraph {
       GraphDataSet dataSet = AmbushGraph.this.currentDataSet;
       if (dataSet.dragPoint != null) {
         if (dataSet.dragPoint.x != me.x || dataSet.dragPoint.y != me.y) {
-          double xFactor = ((mainShell.getSize().x * dataSet.zoomFactor)) / previewShell.getSize().x;
-          double yFactor = ((mainShell.getSize().y * dataSet.zoomFactor)) / previewShell.getSize().y;
-          updateMainOrigin((int)(dataSet.mainOrigin.x + (me.x - dataSet.dragPoint.x) * xFactor),
-                           (int)(dataSet.mainOrigin.y + (me.y - dataSet.dragPoint.y) * yFactor));
+          double xFactor = (dataSet.naturalBounds.x * dataSet.zoomFactor) / previewShell.getSize().x;
+          double yFactor = (dataSet.naturalBounds.y * dataSet.zoomFactor) / previewShell.getSize().y;
+          updateMainOrigin((int)(dataSet.mainOrigin.x + ((me.x - dataSet.dragPoint.x) * xFactor)),
+                           (int)(dataSet.mainOrigin.y + ((me.y - dataSet.dragPoint.y) * yFactor)));
           dataSet.dragPoint = new Point(me.x, me.y);
         }
       }
@@ -643,37 +652,33 @@ public class AmbushGraph {
     @Override
     public void mouseScrolled(MouseEvent me) {
       GraphDataSet dataSet = AmbushGraph.this.currentDataSet;
+      int xZoomChange = (int)((mainShell.getSize().x * (dataSet.zoomFactor + .1)) - (mainShell.getSize().x * dataSet.zoomFactor));
+      int yZoomChange = (int)((mainShell.getSize().y * (dataSet.zoomFactor + .1)) - (mainShell.getSize().y * dataSet.zoomFactor));
       if (me.count > 0) {
         if (dataSet.zoomFactor > 5) {
           // already fully zoomed in
           return;
         }
-        int xZoomShrink = (int)(mainShell.getSize().x * dataSet.zoomFactor) / 10;
-        int yZoomShrink = (int)(mainShell.getSize().y * dataSet.zoomFactor) / 10;
         // scroll forward / zoom in
         dataSet.zoomFactor += .1;
         
         int newX = dataSet.mainOrigin.x;
         int newY = dataSet.mainOrigin.y;
-        newX += xZoomShrink / 2;
-        newY += yZoomShrink / 2;
-        newX += me.x - (previewShell.getSize().x / 2);
-        newY += me.y - (previewShell.getSize().y / 2);
+        newX += xZoomChange / 2;
+        newY += yZoomChange / 2;
         updateMainOrigin(newX, newY);
       } else {
         if (dataSet.zoomFactor < .8) {
           // already fully zoomed out
           return;
         }
-        int xZoomGrow = (int)(mainShell.getSize().x * dataSet.zoomFactor) / 10;
-        int yZoomGrow = (int)(mainShell.getSize().y * dataSet.zoomFactor) / 10;
         // scroll back / zoom out
         dataSet.zoomFactor -= .1;
         
         int newX = dataSet.mainOrigin.x;
         int newY = dataSet.mainOrigin.y;
-        newX -= xZoomGrow / 2;
-        newY -= yZoomGrow / 2;
+        newX -= xZoomChange/ 2;
+        newY -= yZoomChange / 2;
         updateMainOrigin(newX, newY);
       }
     }
